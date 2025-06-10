@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>House Prices Pie Chart</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      text-align: center;
+      padding: 40px;
+      background-color: #f8f9fa;
+      color: #333;
+    }
+
+    h2 {
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    canvas {
+      max-width: 600px;
+      margin: auto;
+      display: block;
+    }
+
+    select, button {
+      padding: 8px 12px;
+      margin: 20px 10px;
+      font-size: 14px;
+    }
+
+    .legend-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 700px;
+      margin: 20px auto 0;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 5px 15px;
+      font-size: 14px;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      margin-right: 8px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    .interpretation {
+      max-width: 800px;
+      margin: 30px auto 0;
+      font-size: 16px;
+      line-height: 1.6;
+      text-align: center;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <h2>Average House Prices by Location</h2>
+
+  <select id="filterSelect">
+    <option value="all">All Locations</option>
+    <option value="low">₹10–₹20 Lakhs</option>
+    <option value="mid">₹21–₹50 Lakhs</option>
+    <option value="high">₹51–₹80 Lakhs</option>
+    <option value="ultra">₹81 Lakhs and Above</option>
+  </select>
+
+  <button onclick="resetZoom()">Reset Zoom</button>
+
+  <canvas id="myPieChart"></canvas>
+  <div class="legend-container" id="legendContainer"></div>
+
+  <div class="interpretation">
+    <strong>Interpretation of House Price Distribution:</strong><br />
+    This pie chart illustrates the average house prices in selected Indian locations. Cities like Delhi and Chandigarh fall in the higher price range, indicating premium real estate markets, while others like Uttar Pradesh offer more affordable housing. This segmentation helps visualize the disparity and distribution of housing costs across urban centers in India.
+  </div>
+
+  <script>
+    const ctx = document.getElementById('myPieChart').getContext('2d');
+    let allData = [];
+    let myChart;
+
+    function createLegend(labels, colors) {
+      const legendContainer = document.getElementById('legendContainer');
+      legendContainer.innerHTML = '';
+      labels.forEach((label, i) => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = `<span class="legend-color" style="background-color:${colors[i]}"></span>${label}`;
+        legendContainer.appendChild(item);
+      });
+    }
+
+    function createChart(labels, data) {
+      if (myChart) myChart.destroy();
+      const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'];
+
+      myChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'House Prices (₹ Lakhs)',
+            data: data,
+            backgroundColor: colors.slice(0, data.length),
+            hoverOffset: 15
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'House Price Distribution',
+              font: { size: 18 }
+            },
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  const label = context.label || '';
+                  const value = context.parsed;
+                  const total = context.chart._metasets[0].total;
+                  const percentage = ((value / total) * 100).toFixed(1);
+                  return `${label}: ₹${value}L (${percentage}%)`;
+                }
+              }
+            },
+            zoom: {
+              pan: { enabled: true, mode: 'r' },
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'r'
+              }
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+
+      createLegend(labels, colors);
+    }
+
+    function applyFilter(filter) {
+      let filtered = [];
+
+      if (filter === 'low') {
+        filtered = allData.filter(item => item.Price >= 10 && item.Price <= 20);
+      } else if (filter === 'mid') {
+        filtered = allData.filter(item => item.Price > 20 && item.Price <= 50);
+      } else if (filter === 'high') {
+        filtered = allData.filter(item => item.Price > 50 && item.Price <= 80);
+      } else if (filter === 'ultra') {
+        filtered = allData.filter(item => item.Price > 80);
+      } else {
+        filtered = allData;
+      }
+
+      const labels = filtered.map(d => d.Location);
+      const data = filtered.map(d => d.Price);
+      createChart(labels, data);
+    }
+
+    Papa.parse('data.csv', {
+      download: true,
+      header: true,
+      complete: function (results) {
+        allData = results.data
+          .filter(row => row.Location && row.Average_House_Price_Lakhs)
+          .map(row => ({
+            Location: row.Location,
+            Price: Number(row.Average_House_Price_Lakhs)
+          }));
+        applyFilter('all');
+      },
+      error: function (err) {
+        console.error('Error loading CSV:', err);
+      }
+    });
+
+    document.getElementById('filterSelect').addEventListener('change', function () {
+      applyFilter(this.value);
+    });
+
+    function resetZoom() {
+      if (myChart) {
+        myChart.resetZoom();
+      }
+    }
+  </script>
+</body>
+</html>
